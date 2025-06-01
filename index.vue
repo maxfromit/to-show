@@ -9,12 +9,12 @@ import { ref, computed, watchEffect, watch } from "vue"
 import { useQuasar } from "quasar"
 
 import { useRouter } from "vue-router"
+import l from "lodash"
+import draggable from "vuedraggable"
 
 import PageTemplate from "pages/components/PageTemplate.vue"
 import MobilePager from "./components/MobilePager.vue"
 
-import l from "lodash"
-import { getTitle } from "src/composables/useLinksCategoriesAndGetItByRouter"
 import SalesPendingCard from "src/pages/components/DashBoard/components/EntityCards/SalesPendingCard/SalesPendingCard.vue"
 import SalesAvailabilityCard from "src/pages/components/DashBoard/components/EntityCards/SalesAvailabilityCard/SalesAvailabilityCard.vue"
 import ProductsShortageCard from "./components/DashBoard/components/EntityCards/ProductsShortageCard/ProductsShortageCard.vue"
@@ -36,10 +36,11 @@ import type {
   CardName,
   CardNamesLowerFirst,
 } from "src/pages/components/DashBoard/types"
+import type { OptionNumber } from "src/types/optionTypes"
+
+import { getTitle } from "src/composables/useLinksCategoriesAndGetItByRouter"
 import { defaultCardsOrder } from "src/pages/components/DashBoard/const"
 import { useGetProductData } from "src/composables/useGetNameById"
-import type { OptionNumber } from "src/types/optionTypes"
-import draggable from "vuedraggable"
 import { Dialog, Notify } from "quasar"
 import { useSettings } from "src/composables/useSettings"
 import { transformObjectKeysToKebabCase } from "src/utils/keysToKebabCase"
@@ -71,7 +72,9 @@ const separator = "~"
 const currentPageKey = computed(() => router.currentRoute.value.path)
 
 const { getPageSettings, savePageSettings } = useSettings()
-const pageSettings = computed(() => getPageSettings(currentPageKey.value))
+
+const { settings: pageSettings, loading: pageSetttingsLoading } =
+  getPageSettings(currentPageKey.value)
 
 type PossibleTypesForAutoTransform = number | string | string[] | OptionNumber[]
 
@@ -241,43 +244,42 @@ const unselectedCardsStateInInitial = computed(() => {
     l.filter(cardsStateOptions.value, (option) => option.status !== "active"),
     "value"
   )
-  return l.pick(defaultCardsState, inactiveKeys)
+  return l.pick(initialCardsState.value, inactiveKeys)
 })
 
-function updateCardsStateAndSaveChangedToLocal() {
+async function updateCardsStateAndSaveChanges() {
   cardsState.value = l.merge(
     l.cloneDeep(cardsState.value),
     unselectedCardsStateInInitial.value
   )
-  savePageSettings(currentPageKey.value, selectedCardsStateToSave.value)
+
+  await savePageSettings(
+    currentPageKey.value,
+    l.pick(cardsState.value, savableKeys)
+  )
 }
 
-const saveSelectedCardsStateAndNotify = () => {
-  updateCardsStateAndSaveChangedToLocal()
-  Notify.create({
-    type: "positive",
-    message: `${
-      selectedCardsStateToSave.value
-        ? "Настройки карточек сохранены"
-        : "Настройки карточек сброшены"
-    }`,
-  })
+const saveSelectedCardsStateAndNotify = async () => {
+  await updateCardsStateAndSaveChanges()
+    .then(() =>
+      Notify.create({
+        type: "positive",
+        message: `${
+          selectedCardsStateToSave.value
+            ? "Настройки карточек сохранены"
+            : "Настройки карточек сброшены"
+        }`,
+      })
+    )
+    .catch(() => {
+      Notify.create({
+        type: "negative",
+        message: "Не удалось сбросить настройки карточек",
+      })
+    })
 }
 
 const isCustomizing = ref(false)
-
-watch(
-  () => isCustomizing.value,
-  (newValue) => {
-    if (newValue) {
-      Notify.create({
-        message: "Сохраняемые параметры:",
-        caption: l.map(cardsStateOptions.value, "label").join(", "),
-        color: "accent",
-      })
-    }
-  }
-)
 
 const allCardExpandState = computed(() =>
   l.every(
@@ -507,7 +509,7 @@ const findedCard = (id: string) => l.find(cards.value, { id })
 
 const isDialogWhatWillBeChoosenToSaveOpen = ref(false)
 
-const resetCardsState = () => {
+const resetCardsState = async () => {
   if (!isDefaultCardsStateChanged.value) return
 
   Dialog.create({
@@ -529,7 +531,20 @@ const resetCardsState = () => {
     cardsState.value = l.cloneDeep(defaultCardsState)
     isCustomizing.value = !isCustomizing.value
     if (!l.isEmpty(pageSettings.value)) {
-      savePageSettings(currentPageKey.value, null)
+      void savePageSettings(currentPageKey.value, null)
+        .then(() =>
+          Notify.create({
+            type: "positive",
+            message:
+              "Личные настройки карточек удалены и сброшены на первоначальные",
+          })
+        )
+        .catch(() => {
+          Notify.create({
+            type: "negative",
+            message: "Не удалось сбросить настройки карточек",
+          })
+        })
     }
   })
 }
@@ -570,31 +585,148 @@ const tab = ref("detail")
           </template>
 
           <q-page padding class="column background-grey q-gutter-y-md">
-            <div class="row justify-around items-start q-pt-sm">
-              <CardsViewCustomizerFab
-                :is-any-card-hidden="isAnyCardHidden"
-                :is-cards-state-changed="isDefaultCardsStateChanged"
-                :is-initial-cards-state-changed="isInitialCardsStateChanged"
-                v-model="isCustomizing"
-                @open-dialog="isDialogWhatWillBeChoosenToSaveOpen = true"
-                @reset="resetCardsState"
-                mobile
-              />
+            <q-linear-progress
+              v-if="pageSetttingsLoading"
+              indeterminate
+              size="xs"
+              color="primary"
+            />
 
-              <CardsExpandButton
-                v-if="allCardExpandState != 'all-nothing-to-show'"
-                :all-card-expand-state="allCardExpandState"
-                @change-expand="changeCardExpandStateForAll()"
-              />
+            <template v-if="!pageSetttingsLoading">
+              <div class="row justify-around items-start q-pt-sm">
+                <CardsViewCustomizerFab
+                  :is-any-card-hidden="isAnyCardHidden"
+                  :is-cards-state-changed="isDefaultCardsStateChanged"
+                  :is-initial-cards-state-changed="isInitialCardsStateChanged"
+                  v-model="isCustomizing"
+                  @open-dialog="isDialogWhatWillBeChoosenToSaveOpen = true"
+                  @reset="resetCardsState"
+                  mobile
+                />
+
+                <CardsExpandButton
+                  v-if="allCardExpandState != 'all-nothing-to-show'"
+                  :all-card-expand-state="allCardExpandState"
+                  @change-expand="changeCardExpandStateForAll()"
+                />
+              </div>
+
+              <q-list
+                v-if="isCustomizing"
+                bordered
+                padding
+                class="border-accent"
+              >
+                <q-item>
+                  <q-item-section>
+                    <q-item-label overline>Сохраняемые параметры:</q-item-label>
+                    <q-item-label caption>
+                      <q-item-section>{{
+                        l
+                          .map(cardsStateOptions, (option) =>
+                            l.lowerCase(option.label)
+                          )
+                          .join(", ")
+                      }}</q-item-section>
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+
+              <draggable
+                v-model="cardsState.order"
+                @start="onDragStart()"
+                @end="onDragEnd()"
+                handle=".drag-handle"
+                item-key="id"
+                class="column q-gutter-md"
+                :disabled="!isCustomizing"
+              >
+                <template #item="{ element }">
+                  <div
+                    v-if="
+                      cardsState.visibilityState[l.lowerFirst(element)] ===
+                        'shown' || isCustomizing
+                    "
+                    :class="{
+                      'inactive-item':
+                        cardsState.visibilityState[l.lowerFirst(element)] ===
+                        'hidden',
+                    }"
+                  >
+                    <KeepAlive>
+                      <component
+                        :is="findedCard(element).component"
+                        v-bind="{
+                          ...findedCard(element).props,
+                          mobile: true,
+                        }"
+                        v-on="findedCard(element).on"
+                        :key="element"
+                      >
+                        <template v-if="isCustomizing" #card-controls>
+                          <div
+                            class="row items-center background-grey bordered q-pa-xs"
+                          >
+                            <CardHandleAndVisibility
+                              v-model="
+                                cardsState.visibilityState[
+                                  l.lowerFirst(element)
+                                ]
+                              "
+                            />
+                          </div>
+                        </template>
+                      </component>
+                    </KeepAlive>
+                  </div>
+                </template>
+              </draggable>
+            </template>
+          </q-page>
+        </PageTemplate>
+      </template>
+    </MobilePager>
+
+    <PageTemplate v-else>
+      {{ pageSetttingsLoading }}
+      <q-page class="row no-wrap">
+        <q-card
+          class="col shadow-0 no-border-radius background-grey"
+          :bordered="false"
+        >
+          <q-linear-progress
+            v-if="pageSetttingsLoading"
+            indeterminate
+            size="xs"
+            color="primary"
+          />
+          <template v-if="!pageSetttingsLoading">
+            <div v-if="isCustomizing" class="row justify-center q-py-sm">
+              <q-list bordered padding class="border-accent">
+                <q-item>
+                  <q-item-section>
+                    <q-item-label overline>Сохраняемые параметры:</q-item-label>
+                    <q-item-label caption>
+                      <q-item-section>{{
+                        l
+                          .map(cardsStateOptions, (option) =>
+                            l.lowerCase(option.label)
+                          )
+                          .join(", ")
+                      }}</q-item-section>
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
             </div>
-
             <draggable
               v-model="cardsState.order"
               @start="onDragStart()"
               @end="onDragEnd()"
               handle=".drag-handle"
               item-key="id"
-              class="column q-gutter-md"
+              class="row q-pa-sm q-gutter-md"
               :disabled="!isCustomizing"
             >
               <template #item="{ element }">
@@ -612,10 +744,7 @@ const tab = ref("detail")
                   <KeepAlive>
                     <component
                       :is="findedCard(element).component"
-                      v-bind="{
-                        ...findedCard(element).props,
-                        mobile: true,
-                      }"
+                      v-bind="findedCard(element).props"
                       v-on="findedCard(element).on"
                       :key="element"
                     >
@@ -635,69 +764,15 @@ const tab = ref("detail")
                 </div>
               </template>
             </draggable>
-          </q-page>
-        </PageTemplate>
-      </template>
-    </MobilePager>
 
-    <PageTemplate v-else>
-      <q-page class="row no-wrap">
-        <q-card
-          class="col shadow-0 no-border-radius background-grey"
-          :bordered="false"
-        >
-          <draggable
-            v-model="cardsState.order"
-            @start="onDragStart()"
-            @end="onDragEnd()"
-            handle=".drag-handle"
-            item-key="id"
-            class="row q-pa-sm q-gutter-md"
-            :disabled="!isCustomizing"
-          >
-            <template #item="{ element }">
-              <div
-                v-if="
-                  cardsState.visibilityState[l.lowerFirst(element)] ===
-                    'shown' || isCustomizing
-                "
-                :class="{
-                  'inactive-item':
-                    cardsState.visibilityState[l.lowerFirst(element)] ===
-                    'hidden',
-                }"
-              >
-                <KeepAlive>
-                  <component
-                    :is="findedCard(element).component"
-                    v-bind="findedCard(element).props"
-                    v-on="findedCard(element).on"
-                    :key="element"
-                  >
-                    <template v-if="isCustomizing" #card-controls>
-                      <div
-                        class="row items-center background-grey bordered q-pa-xs"
-                      >
-                        <CardHandleAndVisibility
-                          v-model="
-                            cardsState.visibilityState[l.lowerFirst(element)]
-                          "
-                        />
-                      </div>
-                    </template>
-                  </component>
-                </KeepAlive>
-              </div>
-            </template>
-          </draggable>
-
-          <!-- <component
+            <!-- <component
               v-for="(card, index) in cards"
               :key="index"
               :is="card.component"
               v-bind="card.props"
               v-on="card.on"
             /> -->
+          </template>
         </q-card>
 
         <q-page-sticky position="bottom-right" :offset="[18, 18]">
@@ -741,5 +816,9 @@ const tab = ref("detail")
 .bordered {
   border: 1px dotted !important;
   border-color: $grey !important;
+}
+
+.border-accent {
+  border: 1px solid $accent !important;
 }
 </style>
