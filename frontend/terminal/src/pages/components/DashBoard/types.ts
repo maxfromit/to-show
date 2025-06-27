@@ -1,6 +1,6 @@
 import type { defaultCardsOrder } from 'src/pages/components/DashBoard/const'
-
-type ExpandStates = ['nothing-to-show', 'expanded', 'collapsed']
+import type { DashboardPageProps } from 'src/pages/index.vue'
+type ExpandStates = ['expanded', 'collapsed']
 
 export type ExpandState = ExpandStates[number]
 
@@ -12,3 +12,18 @@ type LowerFirst<S extends string> = S extends `${infer F}${infer R}`
   : S
 
 export type CardNamesLowerFirst = LowerFirst<CardName>
+
+export type CardsState = {
+  expandState: Record<
+    Exclude<CardNamesLowerFirst, 'saleItemsDeliveredCard'>,
+    ExpandState
+  >
+  visibilityState: Record<CardNamesLowerFirst, VisibilityState>
+  order: CardName[]
+  query: Partial<DashboardPageProps>
+}
+
+export type IsCardEmpty = Record<
+  Exclude<CardNamesLowerFirst, 'saleItemsDeliveredCard'>,
+  boolean
+>

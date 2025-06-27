@@ -6,17 +6,16 @@ import { computed, ref } from 'vue'
 import l from 'lodash'
 import { labelByEntity } from 'src/constants/labels'
 import { columns } from './components/columns'
-import { fragmentAssemblyItem } from './components/fragment'
-import { fragmentAssemblyBasic } from 'src/constants/fragments'
+import { fragmentRelocationItem } from './components/fragment'
+import { fragmentRelocationBasic } from 'src/constants/fragments'
 import ListEntityItemsMainData from 'src/pages/components/DashBoard/components/ListEntityItemsMainData/ListEntityItemsMainData.vue'
 import ListEntityMainData from 'src/pages/components/ListEntityMainData/ListEntityMainData.vue'
-
 import { getFormattedValueByColumnName } from 'src/utils/qTableColumnsHandlers/getFormattedValueByColumnName'
-import { sortedAssemblyItemsByPlannedAt } from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/sortedAssemblyItemsByPlannedAt'
+import { sortedRelocationItemsByPlannedAt } from 'src/pages/components/DashBoard/RelocationsNotConfirmed/components/sortedRelocationItemsByPlannedAt'
 import {
-  whereNotConfirmedAssembly,
-  whereNotConfirmedAssemblyItems,
-} from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/where'
+  whereNotConfirmedRelocation,
+  whereNotConfirmedRelocationItems,
+} from 'src/pages/components/DashBoard/RelocationsNotConfirmed/components/where'
 import { getJustifyByColumnAligning } from 'src/utils/qTableColumnsHandlers/getJustifyByColumnAligning'
 import { useProductMoveNames } from 'src/composables/useProductMoveItemAndName'
 import { rowsPerPage } from 'src/pages/components/DashBoard/components/rowsPerPage'
@@ -39,46 +38,47 @@ const pagination = ref({
 })
 
 const {
-  result: assemblyWithNotConfirmedAssemblyItemsResult,
-  loading: assemblyWithNotConfirmedAssemblyItemsLoading,
+  result: relocationWithNotConfirmedRelocationItemsResult,
+  loading: relocationWithNotConfirmedRelocationItemsLoading,
 } = useQuery(
   gql/* GraphQL */ `
-    query AssembliesNotConfirmed_AssemblyAndAssemblyItems(
+    query RelocationsNotConfirmed_RelocationAndRelocationItems(
       # $limit: Int
       # $offset: Int
-      $where_assembly_items: assembly_item_bool_exp!
-      $where_assembly: assembly_bool_exp!
+      $where_relocation_items: relocation_item_bool_exp!
+      $where_relocation: relocation_bool_exp!
     ) {
-      assembly(
+      relocation(
         # limit: $limit
         # offset: $offset
-        where: $where_assembly
+        where: $where_relocation
       ) {
-        ...MainFragments_AssemblyFragment
-        assembly_items(where: $where_assembly_items) {
-          ...AssembliesNotConfirmed_AssemblyItem
+        ...MainFragments_RelocationsFragment
+        relocation_items(where: $where_relocation_items) {
+          ...RelocationsNotConfirmed_RelocationItem
         }
       }
     }
-    ${fragmentAssemblyBasic}
-    ${fragmentAssemblyItem}
+    ${fragmentRelocationBasic}
+    ${fragmentRelocationItem}
   `,
   () => ({
-    where_assembly_items: whereNotConfirmedAssemblyItems,
-    where_assembly: whereNotConfirmedAssembly,
+    where_relocation_items: whereNotConfirmedRelocationItems,
+    where_relocation: whereNotConfirmedRelocation,
   }),
   // () => ({
   //   fetchPolicy: 'no-cache',
   // }),
 )
 
-const assemblyWithNotConfirmedAssemblyItems = computed(
-  () => assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly ?? [],
+const relocationWithNotConfirmedRelocationItems = computed(
+  () => relocationWithNotConfirmedRelocationItemsResult.value?.relocation ?? [],
 )
 
 const rowsNumber = computed(
   () =>
-    l.size(assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly) ?? 0,
+    l.size(relocationWithNotConfirmedRelocationItemsResult.value?.relocation) ??
+    0,
 )
 </script>
 
@@ -86,8 +86,8 @@ const rowsNumber = computed(
   <VueThemer>
     <q-table
       v-if="!!rowsNumber"
-      :rows="assemblyWithNotConfirmedAssemblyItems"
-      :loading="assemblyWithNotConfirmedAssemblyItemsLoading"
+      :rows="relocationWithNotConfirmedRelocationItems"
+      :loading="relocationWithNotConfirmedRelocationItemsLoading"
       :columns="columns"
       v-model:pagination="pagination"
       binary-state-sort
@@ -130,8 +130,7 @@ const rowsNumber = computed(
               >
                 <ListEntityMainData
                   :entity-data="props.row"
-                  :entity-name="'assembly'"
-                  :assembly-type="'deliveries'"
+                  :entity-name="'relocation'"
                 />
               </q-menu>
             </q-btn>
@@ -166,19 +165,24 @@ const rowsNumber = computed(
                 max-height="25rem"
               >
                 <ListEntityItemsMainData
-                  entity="assembly"
+                  entity="relocation"
                   :entityId="props.row.id"
-                  :assembly-type="'deliveries'"
+                  :relocation-type="'deliveries'"
                   :items="
-                    sortedAssemblyItemsByPlannedAt(props?.row?.assembly_items)
+                    sortedRelocationItemsByPlannedAt(
+                      props?.row?.relocation_items,
+                    )
                   "
-                  header="Не подтверждено в комплектации"
+                  header="Не подтверждено в перемещении"
                   :caption="`Все позиции, где ${l.lowerCase(
-                    getProductMoveName('assembly_item_id'),
+                    getProductMoveName('relocation_item_id'),
                   )}
                         не подтверждены, в которых наступила или прошла
                          ${l.lowerCase(
-                           l.get(labelByEntity, 'assembly_item.planned_at'),
+                           l.get(
+                             labelByEntity,
+                             'relocation_item.planned_in_at',
+                           ),
                          )}`"
                 />
               </q-menu>
@@ -193,11 +197,11 @@ const rowsNumber = computed(
             theme="table.action"
             :to="{
               name: getToName({
-                explicitPathStart: '/assemblies',
+                explicitPathStart: '/relocations',
               }),
               params: {
-                assemblyId: row.id,
-                assemblyMode: 'view',
+                relocationId: row.id,
+                relocationMode: 'view',
               },
             }"
             :icon="'svguse:/icons.svg#arrow-right'"
@@ -222,7 +226,7 @@ const rowsNumber = computed(
     </q-table>
 
     <div
-      v-if="!rowsNumber && !!assemblyWithNotConfirmedAssemblyItemsLoading"
+      v-if="!rowsNumber && !!relocationWithNotConfirmedRelocationItemsLoading"
       class="q-pa-md row col-grow justify-center"
       key="data-loading"
     >
@@ -240,7 +244,7 @@ const rowsNumber = computed(
       class="text-h6 text-center q-pa-md"
       key="data-empty"
     >
-      Неподтвержденных комплектаций нет
+      Неподтвержденных перемещений нет
     </div>
   </VueThemer>
 </template>

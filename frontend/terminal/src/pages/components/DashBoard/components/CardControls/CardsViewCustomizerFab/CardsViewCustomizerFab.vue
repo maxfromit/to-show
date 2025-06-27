@@ -56,10 +56,16 @@ const emit = defineEmits<{
           type="button"
           color="primary"
           @click="emit('open-dialog')"
-          icon="svguse:/icons.svg#upload"
+          :hide-label="!mobile"
+          :external-label="true"
+          label="Сохранить настройки карточек"
+          icon="svguse:/icons.svg#cloud-upload"
         >
-          <q-tooltip theme="extra.delayShorterWidth">
-            Сохранить представление
+          <q-tooltip
+            v-if="!mobile"
+            theme="extra.delayShorterWidth"
+          >
+            Сохранить настройки карточек
           </q-tooltip>
         </q-fab-action>
 
@@ -70,10 +76,16 @@ const emit = defineEmits<{
           padding="0px 0px"
           type="button"
           color="negative"
+          :hide-label="!mobile"
+          :external-label="true"
+          label="Вернуть первоначальное состояние"
           @click="emit('reset')"
           icon="svguse:/icons.svg#close-circle"
         >
-          <q-tooltip theme="extra.delayShorterWidth">
+          <q-tooltip
+            v-if="!mobile"
+            theme="extra.delayShorterWidth"
+          >
             Вернуть первоначальное состояние
           </q-tooltip>
         </q-fab-action>

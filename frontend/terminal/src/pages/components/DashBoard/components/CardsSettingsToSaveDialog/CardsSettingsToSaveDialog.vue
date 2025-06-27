@@ -1,27 +1,54 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import l from 'lodash'
-import { initialCardsStateOptions } from './components/cardsStateOptions'
-import type { CardsStateOption } from './components/cardsStateOptions'
+import type { CardsStateOption } from 'src/pages/components/DashBoard/composables/useCardsStateOptions'
+
+const props = defineProps<{
+  options: CardsStateOption[]
+}>()
 
 const isDialogOpen = defineModel<boolean>('isDialogOpen', { default: false })
 
-const options = defineModel<CardsStateOption[]>('options', {
-  default: [...initialCardsStateOptions],
-})
-
 const emit = defineEmits<{
-  (e: 'save'): void
+  (e: 'choosen-keys', keys: string[]): void
 }>()
 
-const activeOptions = computed(() => {
-  return l.filter(options.value, (option) => option.status === 'active')
+const optionsToChoose = ref<CardsStateOption[]>(l.cloneDeep(props.options))
+
+watch(
+  () => props.options,
+  (newOptions) => {
+    optionsToChoose.value = l.cloneDeep(newOptions)
+  },
+  { immediate: true, deep: true },
+)
+
+// const options = defineModel<CardsStateOption[]>(
+//   'options',
+//   // , {
+//   //   default: [...initialCardsStateOptions],
+//   // }
+// )
+
+const activeOptionKeys = computed(() => {
+  return l
+    .chain(optionsToChoose.value)
+    .filter((option) => option.status === 'active')
+    .map('value')
+    .value()
 })
+
+function reset() {
+  optionsToChoose.value = l.cloneDeep(props.options)
+}
 </script>
 
 <template>
   <VueThemer>
-    <q-dialog v-model="isDialogOpen">
+    <q-dialog
+      v-model="isDialogOpen"
+      @hide="reset()"
+    >
       <q-card
         class="column"
         style="width: 25rem"
@@ -31,7 +58,7 @@ const activeOptions = computed(() => {
             <q-item>
               <q-item-section>
                 <q-item-label class="text-h5">
-                  Настройки карточек для сохранения
+                  Выберите настройки карточек которые будут сохранены
                 </q-item-label>
               </q-item-section>
               <q-item-section
@@ -48,10 +75,7 @@ const activeOptions = computed(() => {
             </q-item>
 
             <template
-              v-for="(option, index) in l.filter(
-                options,
-                (option) => option.status !== 'unchanged',
-              )"
+              v-for="(option, index) in optionsToChoose"
               :key="index"
             >
               <q-item
@@ -84,10 +108,10 @@ const activeOptions = computed(() => {
             />
             <q-btn
               label="Сохранить настройки"
-              @click="emit('save')"
+              @click="emit('choosen-keys', activeOptionKeys)"
               color="primary"
               v-close-popup
-              :disable="l.isEmpty(activeOptions)"
+              :disable="l.isEmpty(activeOptionKeys)"
             />
           </q-item>
         </q-card-section>

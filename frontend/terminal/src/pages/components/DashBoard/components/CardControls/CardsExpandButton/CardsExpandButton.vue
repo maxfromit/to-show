@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AllCardExpandState } from 'src/pages/index.vue'
+import type { AllCardExpandState } from 'src/pages/components/DashBoard/composables/useCardsState'
 
 defineProps<{
   allCardExpandState?: AllCardExpandState

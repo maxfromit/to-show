@@ -1,47 +1,30 @@
 <script setup lang="ts">
-import { watch } from 'vue'
+import { inject } from 'vue'
 import type { ExpandState } from 'src/pages/components/DashBoard/types'
+import { useExpandState } from 'src/pages/components/DashBoard/utils/useExpandState'
 
-const props = defineProps<{
+const isCustomizing = inject('customization-state')
+
+defineProps<{
   mobile?: boolean
-  totalEntityCount?: number
+  isEmptyState?: boolean
   expandedMode?: boolean
+  withDownloadButton?: boolean
   tallTable?: boolean
 }>()
 
-const standardHeightStyle = 'height: 15rem'
 const initialState = 'collapsed'
-
 const expandState = defineModel<ExpandState>('expandState', {
   default: initialState,
 })
 
-function changeExpandState() {
-  if (expandState.value === 'collapsed') {
-    expandState.value = 'expanded'
-    return
-  }
-  if (expandState.value === 'expanded') {
-    expandState.value = 'collapsed'
-    return
-  }
-}
+const emit = defineEmits<{
+  (e: 'download-table'): void
+}>()
 
-watch(
-  () => props.totalEntityCount,
-  () => {
-    if (!props.totalEntityCount && props.totalEntityCount === null) {
-      expandState.value = initialState
-      return
-    }
+const standardHeightStyle = 'height: 15rem'
 
-    if (!props.totalEntityCount) {
-      expandState.value = 'nothing-to-show'
-      return
-    }
-  },
-  { immediate: true },
-)
+const { toggleExpand } = useExpandState(expandState)
 </script>
 
 <template>
@@ -58,19 +41,33 @@ watch(
               <div class="text-h6 text-uppercase">
                 <slot name="header"> </slot>
               </div>
+              <div class="row items-center q-gutter-sm no-wrap">
+                <q-btn
+                  v-if="expandState === 'expanded' && withDownloadButton"
+                  theme="table.action"
+                  icon="svguse:/icons.svg#download"
+                  padding="none"
+                  @click="emit('download-table')"
+                >
+                  <q-tooltip theme="extra.delayWidth">
+                    Скачать таблицу
+                  </q-tooltip>
+                </q-btn>
 
-              <q-btn
-                v-if="!expandedMode && expandState !== 'nothing-to-show'"
-                theme="table.action"
-                dense
-                padding="none"
-                :icon="
-                  expandState === 'collapsed'
-                    ? 'svguse:/icons.svg#alt-arrow-down'
-                    : 'svguse:/icons.svg#alt-arrow-up'
-                "
-                @click="changeExpandState()"
-              />
+                <q-btn
+                  v-if="!expandedMode && (!isEmptyState || isCustomizing)"
+                  theme="table.action"
+                  :color="isCustomizing ? 'accent' : undefined"
+                  dense
+                  padding="none"
+                  :icon="
+                    expandState === 'collapsed'
+                      ? 'svguse:/icons.svg#alt-arrow-down'
+                      : 'svguse:/icons.svg#alt-arrow-up'
+                  "
+                  @click="toggleExpand()"
+                />
+              </div>
             </div>
             <slot name="detailed"> </slot>
           </div>
@@ -84,9 +81,21 @@ watch(
             <slot name="table"> </slot>
           </q-scroll-area>
 
-          <q-slide-transition v-if="!expandedMode && totalEntityCount">
+          <q-slide-transition
+            v-if="!expandedMode && (!isEmptyState || isCustomizing)"
+          >
             <div v-show="expandState === 'expanded'">
-              <q-scroll-area :style="standardHeightStyle">
+              <div
+                v-show="isCustomizing"
+                class="text-center text-bold text-accent q-pa-md"
+              >
+                Карточка будет по умолчанию раскрываться, если будут данные для
+                отображения
+              </div>
+              <q-scroll-area
+                v-show="!isCustomizing"
+                :style="standardHeightStyle"
+              >
                 <slot name="table"> </slot>
               </q-scroll-area>
             </div>

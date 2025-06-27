@@ -6,22 +6,22 @@ import { computed, ref } from 'vue'
 import l from 'lodash'
 import { labelByEntity } from 'src/constants/labels'
 import { columns } from './components/columns'
-import { fragmentAssemblyItem } from './components/fragment'
-import { fragmentAssemblyBasic } from 'src/constants/fragments'
+import { fragmentDisassemblyItem } from './components/fragment'
 import ListEntityItemsMainData from 'src/pages/components/DashBoard/components/ListEntityItemsMainData/ListEntityItemsMainData.vue'
-import ListEntityMainData from 'src/pages/components/ListEntityMainData/ListEntityMainData.vue'
+import { fragmentDisassemblyBasic } from 'src/constants/fragments'
 
 import { getFormattedValueByColumnName } from 'src/utils/qTableColumnsHandlers/getFormattedValueByColumnName'
-import { sortedAssemblyItemsByPlannedAt } from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/sortedAssemblyItemsByPlannedAt'
+import { sortedDisassemblyItemsByPlannedAt } from 'src/pages/components/DashBoard/DisassembliesNotConfirmed/components/sortedDisassemblyItemsByPlannedAt'
 import {
-  whereNotConfirmedAssembly,
-  whereNotConfirmedAssemblyItems,
-} from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/where'
+  whereNotConfirmedDisassembly,
+  whereNotConfirmedDisassemblyItems,
+} from 'src/pages/components/DashBoard/DisassembliesNotConfirmed/components/where'
 import { getJustifyByColumnAligning } from 'src/utils/qTableColumnsHandlers/getJustifyByColumnAligning'
 import { useProductMoveNames } from 'src/composables/useProductMoveItemAndName'
 import { rowsPerPage } from 'src/pages/components/DashBoard/components/rowsPerPage'
 import { rowsPerPageOptions } from 'src/boot/themer'
 import { getToName } from 'src/composables/useLinksCategoriesAndGetItByRouter'
+import ListEntityMainData from 'src/pages/components/ListEntityMainData/ListEntityMainData.vue'
 import DivBottomTableWithPaginationControl from 'src/pages/components/DashBoard/components/DivBottomTableWithPaginationControl.vue'
 
 const props = defineProps<{
@@ -39,46 +39,49 @@ const pagination = ref({
 })
 
 const {
-  result: assemblyWithNotConfirmedAssemblyItemsResult,
-  loading: assemblyWithNotConfirmedAssemblyItemsLoading,
+  result: disassemblyWithNotConfirmedDisassemblyItemsResult,
+  loading: disassemblyWithNotConfirmedDisassemblyItemsLoading,
 } = useQuery(
   gql/* GraphQL */ `
-    query AssembliesNotConfirmed_AssemblyAndAssemblyItems(
+    query DisassembliesNotConfirmed_DisassemblyAndDisassemblyItems(
       # $limit: Int
       # $offset: Int
-      $where_assembly_items: assembly_item_bool_exp!
-      $where_assembly: assembly_bool_exp!
+      $where_disassembly_items: disassembly_item_bool_exp!
+      $where_disassembly: disassembly_bool_exp!
     ) {
-      assembly(
+      disassembly(
         # limit: $limit
         # offset: $offset
-        where: $where_assembly
+        where: $where_disassembly
       ) {
-        ...MainFragments_AssemblyFragment
-        assembly_items(where: $where_assembly_items) {
-          ...AssembliesNotConfirmed_AssemblyItem
+        ...MainFragments_DisassemblyFragment
+        disassembly_items(where: $where_disassembly_items) {
+          ...DisassembliesNotConfirmed_DisassemblyItem
         }
       }
     }
-    ${fragmentAssemblyBasic}
-    ${fragmentAssemblyItem}
+    ${fragmentDisassemblyBasic}
+    ${fragmentDisassemblyItem}
   `,
   () => ({
-    where_assembly_items: whereNotConfirmedAssemblyItems,
-    where_assembly: whereNotConfirmedAssembly,
+    where_disassembly_items: whereNotConfirmedDisassemblyItems,
+    where_disassembly: whereNotConfirmedDisassembly,
   }),
   // () => ({
   //   fetchPolicy: 'no-cache',
   // }),
 )
 
-const assemblyWithNotConfirmedAssemblyItems = computed(
-  () => assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly ?? [],
+const disassemblyWithNotConfirmedDisassemblyItems = computed(
+  () =>
+    disassemblyWithNotConfirmedDisassemblyItemsResult.value?.disassembly ?? [],
 )
 
 const rowsNumber = computed(
   () =>
-    l.size(assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly) ?? 0,
+    l.size(
+      disassemblyWithNotConfirmedDisassemblyItemsResult.value?.disassembly,
+    ) ?? 0,
 )
 </script>
 
@@ -86,8 +89,8 @@ const rowsNumber = computed(
   <VueThemer>
     <q-table
       v-if="!!rowsNumber"
-      :rows="assemblyWithNotConfirmedAssemblyItems"
-      :loading="assemblyWithNotConfirmedAssemblyItemsLoading"
+      :rows="disassemblyWithNotConfirmedDisassemblyItems"
+      :loading="disassemblyWithNotConfirmedDisassemblyItemsLoading"
       :columns="columns"
       v-model:pagination="pagination"
       binary-state-sort
@@ -130,8 +133,8 @@ const rowsNumber = computed(
               >
                 <ListEntityMainData
                   :entity-data="props.row"
-                  :entity-name="'assembly'"
-                  :assembly-type="'deliveries'"
+                  :entity-name="'disassembly'"
+                  :disassembly-type="'deliveries'"
                 />
               </q-menu>
             </q-btn>
@@ -166,19 +169,21 @@ const rowsNumber = computed(
                 max-height="25rem"
               >
                 <ListEntityItemsMainData
-                  entity="assembly"
+                  entity="disassembly"
                   :entityId="props.row.id"
-                  :assembly-type="'deliveries'"
+                  :disassembly-type="'deliveries'"
                   :items="
-                    sortedAssemblyItemsByPlannedAt(props?.row?.assembly_items)
+                    sortedDisassemblyItemsByPlannedAt(
+                      props?.row?.disassembly_items,
+                    )
                   "
-                  header="Не подтверждено в комплектации"
+                  header="Не подтверждено в разукомплектации"
                   :caption="`Все позиции, где ${l.lowerCase(
-                    getProductMoveName('assembly_item_id'),
+                    getProductMoveName('disassembly_item_id'),
                   )}
                         не подтверждены, в которых наступила или прошла
                          ${l.lowerCase(
-                           l.get(labelByEntity, 'assembly_item.planned_at'),
+                           l.get(labelByEntity, 'disassembly_item.planned_at'),
                          )}`"
                 />
               </q-menu>
@@ -193,11 +198,11 @@ const rowsNumber = computed(
             theme="table.action"
             :to="{
               name: getToName({
-                explicitPathStart: '/assemblies',
+                explicitPathStart: '/disassemblies',
               }),
               params: {
-                assemblyId: row.id,
-                assemblyMode: 'view',
+                disassemblyId: row.id,
+                disassemblyMode: 'view',
               },
             }"
             :icon="'svguse:/icons.svg#arrow-right'"
@@ -222,7 +227,7 @@ const rowsNumber = computed(
     </q-table>
 
     <div
-      v-if="!rowsNumber && !!assemblyWithNotConfirmedAssemblyItemsLoading"
+      v-if="!rowsNumber && !!disassemblyWithNotConfirmedDisassemblyItemsLoading"
       class="q-pa-md row col-grow justify-center"
       key="data-loading"
     >
@@ -240,7 +245,7 @@ const rowsNumber = computed(
       class="text-h6 text-center q-pa-md"
       key="data-empty"
     >
-      Неподтвержденных комплектаций нет
+      Неподтвержденных разукомплектаций нет
     </div>
   </VueThemer>
 </template>

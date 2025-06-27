@@ -1,31 +1,34 @@
 <script setup lang="ts">
+import { computed, ref, watch, watchEffect } from 'vue'
 import { useQuery } from '@vue/apollo-composable'
 import gql from 'graphql-tag'
-
-import { computed, ref } from 'vue'
 import l from 'lodash'
+
 import { labelByEntity } from 'src/constants/labels'
 import { columns } from './components/columns'
-import { fragmentAssemblyItem } from './components/fragment'
-import { fragmentAssemblyBasic } from 'src/constants/fragments'
-import ListEntityItemsMainData from 'src/pages/components/DashBoard/components/ListEntityItemsMainData/ListEntityItemsMainData.vue'
+import { allActiveStatusesChoosen } from 'src/utils/handleSaleStatus'
 import ListEntityMainData from 'src/pages/components/ListEntityMainData/ListEntityMainData.vue'
+import { fragmentSaleItem } from './components/fragment'
+import { fragmentSaleBasic } from 'src/constants/fragments'
+import ListEntityItemsMainData from 'src/pages/components/DashBoard/components/ListEntityItemsMainData/ListEntityItemsMainData.vue'
 
 import { getFormattedValueByColumnName } from 'src/utils/qTableColumnsHandlers/getFormattedValueByColumnName'
-import { sortedAssemblyItemsByPlannedAt } from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/sortedAssemblyItemsByPlannedAt'
-import {
-  whereNotConfirmedAssembly,
-  whereNotConfirmedAssemblyItems,
-} from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/where'
+import { sortedSaleItemsByDeadline } from './components/sortSaleItemsByDeadline'
 import { getJustifyByColumnAligning } from 'src/utils/qTableColumnsHandlers/getJustifyByColumnAligning'
-import { useProductMoveNames } from 'src/composables/useProductMoveItemAndName'
 import { rowsPerPage } from 'src/pages/components/DashBoard/components/rowsPerPage'
 import { rowsPerPageOptions } from 'src/boot/themer'
+import { useWhere, whereNotConfirmedSaleItems } from './components/where'
+import { useProductMoveNames } from 'src/composables/useProductMoveItemAndName'
 import { getToName } from 'src/composables/useLinksCategoriesAndGetItByRouter'
 import DivBottomTableWithPaginationControl from 'src/pages/components/DashBoard/components/DivBottomTableWithPaginationControl.vue'
 
 const props = defineProps<{
+  saleStatuses?: string[]
   mobile?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:whereSale', value: typeof whereSale.value | null): void
 }>()
 
 const { getProductMoveName } = useProductMoveNames()
@@ -33,52 +36,57 @@ const { getProductMoveName } = useProductMoveNames()
 const pagination = ref({
   // page: 1,
   rowsPerPage: rowsPerPage,
-  sortBy: 'planned_at',
+  sortBy: 'deadline',
   descending: false,
   // rowsNumber: 0, // Initialize with 0 or the total number of rows if known
 })
 
+const whereSale = computed(() => useWhere(props.saleStatuses))
+
+watchEffect(() => {
+  emit('update:whereSale', whereSale.value)
+})
+
 const {
-  result: assemblyWithNotConfirmedAssemblyItemsResult,
-  loading: assemblyWithNotConfirmedAssemblyItemsLoading,
+  result: saleWithNotConfirmedSaleItemsResult,
+  loading: saleWithNotConfirmedSaleItemsLoading,
 } = useQuery(
   gql/* GraphQL */ `
-    query AssembliesNotConfirmed_AssemblyAndAssemblyItems(
+    query SalesNotConfirmed_SaleAndSaleItems(
       # $limit: Int
       # $offset: Int
-      $where_assembly_items: assembly_item_bool_exp!
-      $where_assembly: assembly_bool_exp!
+      $where_sale_items: sale_item_bool_exp!
+      $where_sale: sale_bool_exp!
     ) {
-      assembly(
+      sale(
         # limit: $limit
         # offset: $offset
-        where: $where_assembly
+        where: $where_sale
       ) {
-        ...MainFragments_AssemblyFragment
-        assembly_items(where: $where_assembly_items) {
-          ...AssembliesNotConfirmed_AssemblyItem
+        ...MainFragments_SaleFragment
+        sale_items(where: $where_sale_items) {
+          ...SalesNotConfirmed_SaleItem
         }
       }
     }
-    ${fragmentAssemblyBasic}
-    ${fragmentAssemblyItem}
+    ${fragmentSaleBasic}
+    ${fragmentSaleItem}
   `,
   () => ({
-    where_assembly_items: whereNotConfirmedAssemblyItems,
-    where_assembly: whereNotConfirmedAssembly,
+    where_sale_items: whereNotConfirmedSaleItems,
+    where_sale: useWhere(props.saleStatuses),
   }),
   // () => ({
   //   fetchPolicy: 'no-cache',
   // }),
 )
 
-const assemblyWithNotConfirmedAssemblyItems = computed(
-  () => assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly ?? [],
+const saleWithNotConfirmedSaleItems = computed(
+  () => saleWithNotConfirmedSaleItemsResult.value?.sale ?? [],
 )
 
 const rowsNumber = computed(
-  () =>
-    l.size(assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly) ?? 0,
+  () => l.size(saleWithNotConfirmedSaleItemsResult.value?.sale) ?? 0,
 )
 </script>
 
@@ -86,8 +94,8 @@ const rowsNumber = computed(
   <VueThemer>
     <q-table
       v-if="!!rowsNumber"
-      :rows="assemblyWithNotConfirmedAssemblyItems"
-      :loading="assemblyWithNotConfirmedAssemblyItemsLoading"
+      :rows="saleWithNotConfirmedSaleItems"
+      :loading="saleWithNotConfirmedSaleItemsLoading"
       :columns="columns"
       v-model:pagination="pagination"
       binary-state-sort
@@ -100,7 +108,7 @@ const rowsNumber = computed(
       wrap-cells
       key="data-showing"
     >
-      <template #body-cell-note="props">
+      <template #body-cell-customer="props">
         <q-td
           auto-width
           :props="props"
@@ -130,8 +138,7 @@ const rowsNumber = computed(
               >
                 <ListEntityMainData
                   :entity-data="props.row"
-                  :entity-name="'assembly'"
-                  :assembly-type="'deliveries'"
+                  :entity-name="'sale'"
                 />
               </q-menu>
             </q-btn>
@@ -139,7 +146,7 @@ const rowsNumber = computed(
         </q-td>
       </template>
 
-      <template #body-cell-planned_at="props">
+      <template #body-cell-deadline="props">
         <q-td :props="props">
           <div
             :class="getJustifyByColumnAligning(props.col.align)"
@@ -166,20 +173,15 @@ const rowsNumber = computed(
                 max-height="25rem"
               >
                 <ListEntityItemsMainData
-                  entity="assembly"
+                  entity="sale"
                   :entityId="props.row.id"
-                  :assembly-type="'deliveries'"
-                  :items="
-                    sortedAssemblyItemsByPlannedAt(props?.row?.assembly_items)
-                  "
-                  header="Не подтверждено в комплектации"
+                  :items="sortedSaleItemsByDeadline(props?.row?.sale_items)"
+                  header="Не подтверждено в заказе"
                   :caption="`Все позиции, где ${l.lowerCase(
-                    getProductMoveName('assembly_item_id'),
+                    getProductMoveName('sale_item_id'),
                   )}
-                        не подтверждены, в которых наступила или прошла
-                         ${l.lowerCase(
-                           l.get(labelByEntity, 'assembly_item.planned_at'),
-                         )}`"
+                    не подтверждены, в которых наступил или прошел
+                     ${l.lowerCase(labelByEntity?.sale_item?.deadline)}`"
                 />
               </q-menu>
             </q-btn>
@@ -193,12 +195,9 @@ const rowsNumber = computed(
             theme="table.action"
             :to="{
               name: getToName({
-                explicitPathStart: '/assemblies',
+                explicitPathStart: '/sales',
               }),
-              params: {
-                assemblyId: row.id,
-                assemblyMode: 'view',
-              },
+              params: { saleId: row.id, saleMode: 'view' },
             }"
             :icon="'svguse:/icons.svg#arrow-right'"
           >
@@ -222,7 +221,7 @@ const rowsNumber = computed(
     </q-table>
 
     <div
-      v-if="!rowsNumber && !!assemblyWithNotConfirmedAssemblyItemsLoading"
+      v-if="!rowsNumber && !!saleWithNotConfirmedSaleItemsLoading"
       class="q-pa-md row col-grow justify-center"
       key="data-loading"
     >
@@ -240,7 +239,11 @@ const rowsNumber = computed(
       class="text-h6 text-center q-pa-md"
       key="data-empty"
     >
-      Неподтвержденных комплектаций нет
+      {{
+        !l.isEmpty(saleStatuses) && !allActiveStatusesChoosen(saleStatuses)
+          ? 'Неподтвержденных развозов в заказах с выбранным статусом нет'
+          : 'Неподтвержденных развозов нет'
+      }}
     </div>
   </VueThemer>
 </template>

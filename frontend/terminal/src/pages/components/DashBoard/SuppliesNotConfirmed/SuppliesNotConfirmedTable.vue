@@ -6,22 +6,22 @@ import { computed, ref } from 'vue'
 import l from 'lodash'
 import { labelByEntity } from 'src/constants/labels'
 import { columns } from './components/columns'
-import { fragmentAssemblyItem } from './components/fragment'
-import { fragmentAssemblyBasic } from 'src/constants/fragments'
+import { fragmentSupplyItem } from './components/fragment'
+import { fragmentSupplyBasic } from 'src/constants/fragments'
 import ListEntityItemsMainData from 'src/pages/components/DashBoard/components/ListEntityItemsMainData/ListEntityItemsMainData.vue'
-import ListEntityMainData from 'src/pages/components/ListEntityMainData/ListEntityMainData.vue'
 
 import { getFormattedValueByColumnName } from 'src/utils/qTableColumnsHandlers/getFormattedValueByColumnName'
-import { sortedAssemblyItemsByPlannedAt } from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/sortedAssemblyItemsByPlannedAt'
+import { sortedSupplyItemsByPlannedAt } from 'src/pages/components/DashBoard/SuppliesNotConfirmed/components/sortedSupplyItemsByPlannedAt'
 import {
-  whereNotConfirmedAssembly,
-  whereNotConfirmedAssemblyItems,
-} from 'src/pages/components/DashBoard/AssembliesNotConfirmed/components/where'
+  whereNotConfirmedSupply,
+  whereNotConfirmedSupplyItems,
+} from 'src/pages/components/DashBoard/SuppliesNotConfirmed/components/where'
 import { getJustifyByColumnAligning } from 'src/utils/qTableColumnsHandlers/getJustifyByColumnAligning'
 import { useProductMoveNames } from 'src/composables/useProductMoveItemAndName'
 import { rowsPerPage } from 'src/pages/components/DashBoard/components/rowsPerPage'
 import { rowsPerPageOptions } from 'src/boot/themer'
 import { getToName } from 'src/composables/useLinksCategoriesAndGetItByRouter'
+import ListEntityMainData from 'src/pages/components/ListEntityMainData/ListEntityMainData.vue'
 import DivBottomTableWithPaginationControl from 'src/pages/components/DashBoard/components/DivBottomTableWithPaginationControl.vue'
 
 const props = defineProps<{
@@ -39,46 +39,45 @@ const pagination = ref({
 })
 
 const {
-  result: assemblyWithNotConfirmedAssemblyItemsResult,
-  loading: assemblyWithNotConfirmedAssemblyItemsLoading,
+  result: supplyWithNotConfirmedSupplyItemsResult,
+  loading: supplyWithNotConfirmedSupplyItemsLoading,
 } = useQuery(
   gql/* GraphQL */ `
-    query AssembliesNotConfirmed_AssemblyAndAssemblyItems(
+    query SuppliesNotConfirmed_SupplyAndSupplyItems(
       # $limit: Int
       # $offset: Int
-      $where_assembly_items: assembly_item_bool_exp!
-      $where_assembly: assembly_bool_exp!
+      $where_supply_items: supply_item_bool_exp!
+      $where_supply: supply_bool_exp!
     ) {
-      assembly(
+      supply(
         # limit: $limit
         # offset: $offset
-        where: $where_assembly
+        where: $where_supply
       ) {
-        ...MainFragments_AssemblyFragment
-        assembly_items(where: $where_assembly_items) {
-          ...AssembliesNotConfirmed_AssemblyItem
+        ...MainFragments_SupplyFragment
+        supply_items(where: $where_supply_items) {
+          ...SuppliesNotConfirmed_SupplyItem
         }
       }
     }
-    ${fragmentAssemblyBasic}
-    ${fragmentAssemblyItem}
+    ${fragmentSupplyBasic}
+    ${fragmentSupplyItem}
   `,
   () => ({
-    where_assembly_items: whereNotConfirmedAssemblyItems,
-    where_assembly: whereNotConfirmedAssembly,
+    where_supply_items: whereNotConfirmedSupplyItems,
+    where_supply: whereNotConfirmedSupply,
   }),
   // () => ({
   //   fetchPolicy: 'no-cache',
   // }),
 )
 
-const assemblyWithNotConfirmedAssemblyItems = computed(
-  () => assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly ?? [],
+const supplyWithNotConfirmedSupplyItems = computed(
+  () => supplyWithNotConfirmedSupplyItemsResult.value?.supply ?? [],
 )
 
 const rowsNumber = computed(
-  () =>
-    l.size(assemblyWithNotConfirmedAssemblyItemsResult.value?.assembly) ?? 0,
+  () => l.size(supplyWithNotConfirmedSupplyItemsResult.value?.supply) ?? 0,
 )
 </script>
 
@@ -86,8 +85,8 @@ const rowsNumber = computed(
   <VueThemer>
     <q-table
       v-if="!!rowsNumber"
-      :rows="assemblyWithNotConfirmedAssemblyItems"
-      :loading="assemblyWithNotConfirmedAssemblyItemsLoading"
+      :rows="supplyWithNotConfirmedSupplyItems"
+      :loading="supplyWithNotConfirmedSupplyItemsLoading"
       :columns="columns"
       v-model:pagination="pagination"
       binary-state-sort
@@ -100,7 +99,7 @@ const rowsNumber = computed(
       wrap-cells
       key="data-showing"
     >
-      <template #body-cell-note="props">
+      <template #body-cell-supplier="props">
         <q-td
           auto-width
           :props="props"
@@ -130,8 +129,8 @@ const rowsNumber = computed(
               >
                 <ListEntityMainData
                   :entity-data="props.row"
-                  :entity-name="'assembly'"
-                  :assembly-type="'deliveries'"
+                  :entity-name="'supply'"
+                  :supply-type="'deliveries'"
                 />
               </q-menu>
             </q-btn>
@@ -166,19 +165,22 @@ const rowsNumber = computed(
                 max-height="25rem"
               >
                 <ListEntityItemsMainData
-                  entity="assembly"
+                  entity="supply"
                   :entityId="props.row.id"
-                  :assembly-type="'deliveries'"
+                  :supply-type="'deliveries'"
                   :items="
-                    sortedAssemblyItemsByPlannedAt(props?.row?.assembly_items)
+                    sortedSupplyItemsByPlannedAt(props?.row?.supply_items)
                   "
-                  header="Не подтверждено в комплектации"
+                  header="Не подтверждено в поставке"
                   :caption="`Все позиции, где ${l.lowerCase(
-                    getProductMoveName('assembly_item_id'),
+                    getProductMoveName('supply_item_id', 'deliveries'),
                   )}
                         не подтверждены, в которых наступила или прошла
                          ${l.lowerCase(
-                           l.get(labelByEntity, 'assembly_item.planned_at'),
+                           l.get(
+                             labelByEntity,
+                             'supply_item.deliveries.planned_at',
+                           ),
                          )}`"
                 />
               </q-menu>
@@ -193,11 +195,13 @@ const rowsNumber = computed(
             theme="table.action"
             :to="{
               name: getToName({
-                explicitPathStart: '/assemblies',
+                explicitPathStart: '/supplies',
+                explicitParams: { supplyType: 'deliveries' },
               }),
               params: {
-                assemblyId: row.id,
-                assemblyMode: 'view',
+                supplyType: 'deliveries',
+                supplyId: row.id,
+                supplyMode: 'view',
               },
             }"
             :icon="'svguse:/icons.svg#arrow-right'"
@@ -222,7 +226,7 @@ const rowsNumber = computed(
     </q-table>
 
     <div
-      v-if="!rowsNumber && !!assemblyWithNotConfirmedAssemblyItemsLoading"
+      v-if="!rowsNumber && !!supplyWithNotConfirmedSupplyItemsLoading"
       class="q-pa-md row col-grow justify-center"
       key="data-loading"
     >
@@ -240,7 +244,7 @@ const rowsNumber = computed(
       class="text-h6 text-center q-pa-md"
       key="data-empty"
     >
-      Неподтвержденных комплектаций нет
+      Неподтвержденных привозов нет
     </div>
   </VueThemer>
 </template>
